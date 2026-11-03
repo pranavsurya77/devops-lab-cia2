@@ -1,0 +1,3 @@
+# Send only the built jar to Docker
+*
+!target/library-manager.jar

@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: library-manager
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: library-manager
+  template:
+    metadata:
+      labels:
+        app: library-manager
+    spec:
+      containers:
+        - name: library-manager
+          image: library-manager:local
+          ports:
+            - containerPort: 8080
