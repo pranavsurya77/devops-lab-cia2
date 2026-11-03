@@ -1,0 +1,41 @@
+name: CI/CD
+
+# Runs only for pushes to the "actions" branch; Jenkins handles "main"
+on:
+  push:
+    branches: [actions]
+
+env:
+  # "gha-" keeps these tags separate from the Jenkins build numbers
+  IMAGE: asia-south1-docker.pkg.dev/cia2-513606/library-manager/library-manager:gha-${{ github.run_number }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build and Test
+        run: mvn -B -ntp clean package
+
+      - name: Save the GCP key to a file
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        run: printf '%s' "$GCP_CREDENTIALS" > "$RUNNER_TEMP/key.json"
+
+      - name: Docker Build and Push
+        run: |
+          docker build -t "$IMAGE" .
+          docker login -u _json_key --password-stdin https://asia-south1-docker.pkg.dev < "$RUNNER_TEMP/key.json"
+          docker push "$IMAGE"
+
+      - name: Deploy with Ansible
+        run: docker run --rm -v "$PWD:/work" -v "$RUNNER_TEMP/key.json:/key.json" -w /work google/cloud-sdk:slim bash ansible/deploy.sh "$IMAGE"
