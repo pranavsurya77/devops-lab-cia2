@@ -18,7 +18,7 @@ public class InfoController {
         this.version = version;
     }
 
-    @GetMapping({"/", "/api/info"})
+    @GetMapping("/api/info")
     public Map<String, String> info() {
         return Map.of("app", "Library Book Manager", "version", version, "host", hostname());
     }
