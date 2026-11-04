@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     triggers {
-        // Check GitHub for new commits every 2 minutes
-        pollSCM('H/2 * * * *')
+        // Build as soon as GitHub's webhook reports a push
+        githubPush()
     }
 
     environment {
