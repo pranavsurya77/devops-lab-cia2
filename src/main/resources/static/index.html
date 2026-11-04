@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Library Book Manager</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 820px; margin: 24px auto; padding: 0 16px; color: #222; background: #f6f7f9; }
+  h1 { margin-bottom: 4px; }
+  .info { color: #666; font-size: 13px; margin-bottom: 20px; }
+  .card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  h2 { font-size: 17px; margin: 0 0 12px; }
+  label { display: block; font-size: 13px; margin: 8px 0 4px; }
+  input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+  .row { display: flex; gap: 10px; }
+  .row > div { flex: 1; }
+  button { margin-top: 12px; padding: 8px 14px; border: 0; border-radius: 4px; background: #1b5e8c; color: #fff; cursor: pointer; }
+  button.small { margin: 0 4px 0 0; padding: 4px 8px; font-size: 12px; }
+  button.grey { background: #777; }
+  button.red { background: #b33; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; }
+  .msg { margin-top: 10px; font-size: 14px; }
+  .ok { color: #1a7f37; }
+  .err { color: #b33; }
+  .hint { color: #888; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h1>Library Book Manager</h1>
+<div class="info" id="info">Loading...</div>
+
+<div class="card">
+  <h2>Add a book</h2>
+  <div class="row">
+    <div>
+      <label for="title">Title *</label>
+      <input id="title" placeholder="e.g. Clean Architecture">
+    </div>
+    <div>
+      <label for="author">Author *</label>
+      <input id="author" placeholder="e.g. Robert C. Martin">
+    </div>
+    <div>
+      <label for="isbn">ISBN (optional)</label>
+      <input id="isbn" placeholder="e.g. 9780134494166">
+    </div>
+  </div>
+  <button onclick="addBook()">Add book</button>
+  <div class="msg" id="addMsg"></div>
+</div>
+
+<div class="card">
+  <h2>Borrow a book</h2>
+  <div class="row">
+    <div>
+      <label for="borrowId">Book ID *</label>
+      <input id="borrowId" placeholder="e.g. 1">
+    </div>
+    <div>
+      <label for="borrower">Your name *</label>
+      <input id="borrower" placeholder="e.g. Pranav">
+    </div>
+  </div>
+  <button onclick="borrowBook()">Borrow</button>
+  <div class="msg" id="borrowMsg"></div>
+</div>
+
+<div class="card">
+  <h2>Books</h2>
+  <div class="row">
+    <div><input id="search" placeholder="Search by title or author, e.g. clean" oninput="loadBooks()"></div>
+  </div>
+  <table>
+    <thead><tr><th>ID</th><th>Title</th><th>Author</th><th>Status</th><th></th></tr></thead>
+    <tbody id="books"></tbody>
+  </table>
+  <div class="msg" id="listMsg"></div>
+  <p class="hint">API docs: <a href="/swagger-ui.html">/swagger-ui.html</a> &middot; Health: <a href="/actuator/health">/actuator/health</a></p>
+</div>
+
+<script>
+  function show(id, text, ok) {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.className = 'msg ' + (ok ? 'ok' : 'err');
+  }
+
+  async function call(method, url, body) {
+    const res = await fetch(url, {
+      method: method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const data = res.status === 204 ? null : await res.json();
+    if (!res.ok) throw new Error(data && data.error ? data.error : 'Request failed (' + res.status + ')');
+    return data;
+  }
+
+  async function loadInfo() {
+    const info = await call('GET', '/api/info');
+    document.getElementById('info').textContent =
+      'Version ' + info.version + ' · served by pod ' + info.host;
+  }
+
+  async function loadBooks() {
+    const q = document.getElementById('search').value;
+    const books = await call('GET', '/api/books?q=' + encodeURIComponent(q));
+    const rows = books.map(b =>
+      '<tr><td>' + b.id + '</td><td>' + esc(b.title) + '</td><td>' + esc(b.author) + '</td><td>' +
+      (b.available ? 'Available' : 'Borrowed by ' + esc(b.borrowedBy)) + '</td><td>' +
+      (b.available ? '' : '<button class="small grey" onclick="returnBook(' + b.id + ')">Return</button>') +
+      '<button class="small red" onclick="deleteBook(' + b.id + ')">Delete</button></td></tr>');
+    document.getElementById('books').innerHTML = rows.join('') || '<tr><td colspan="5">No books found</td></tr>';
+  }
+
+  async function addBook() {
+    try {
+      const book = await call('POST', '/api/books', {
+        title: document.getElementById('title').value,
+        author: document.getElementById('author').value,
+        isbn: document.getElementById('isbn').value || null
+      });
+      show('addMsg', 'Added "' + book.title + '" with ID ' + book.id, true);
+      ['title', 'author', 'isbn'].forEach(id => document.getElementById(id).value = '');
+      loadBooks();
+    } catch (e) { show('addMsg', e.message, false); }
+  }
+
+  async function borrowBook() {
+    try {
+      const id = document.getElementById('borrowId').value;
+      const book = await call('POST', '/api/books/' + id + '/borrow', { borrower: document.getElementById('borrower').value });
+      show('borrowMsg', '"' + book.title + '" borrowed by ' + book.borrowedBy, true);
+      loadBooks();
+    } catch (e) { show('borrowMsg', e.message, false); }
+  }
+
+  async function returnBook(id) {
+    try { await call('POST', '/api/books/' + id + '/return'); show('listMsg', 'Book ' + id + ' returned', true); loadBooks(); }
+    catch (e) { show('listMsg', e.message, false); }
+  }
+
+  async function deleteBook(id) {
+    try { await call('DELETE', '/api/books/' + id); show('listMsg', 'Book ' + id + ' deleted', true); loadBooks(); }
+    catch (e) { show('listMsg', e.message, false); }
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  }
+
+  loadInfo();
+  loadBooks();
+</script>
+</body>
+</html>
