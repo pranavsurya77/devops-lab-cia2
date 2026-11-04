@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/books")
+@RequestMapping("/api/boks")
 @Tag(name = "Books", description = "Manage the library catalogue and loans")
 public class BookController {
 
